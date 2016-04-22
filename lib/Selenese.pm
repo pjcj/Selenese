@@ -186,7 +186,7 @@ __END__
 
 =head1 NAME
 
-Selenese - run Selenium IDE tests without the IDE
+Selenese - Run Selenium IDE tests without the IDE
 
 =head1 SYNOPSIS
 
