@@ -203,10 +203,15 @@ example, they could be used in a headless Continuous Integration environment.
 
 =over
 
-=item * Perl 5.18.2 or greater.
+=item * Perl 5.18.2 or greater
 
 This is probably not a hard requirement, but I've not thought much about earlier
 versions.
+
+=item * V8
+
+On debian and ubuntu this requirement can be satisfied by installing the module
+libv8-dev.
 
 =back
 
