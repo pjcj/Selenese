@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -CSAD
 
 # Copyright 2016, Paul Johnson (paul@pjcj.net) http://www.pjcj.net
 
@@ -6,17 +6,21 @@
 
 use 5.18.2;
 use warnings;
+use utf8::all;
 
 use Data::Dumper;
 use Getopt::Long;
 use HTML::TreeBuilder;
+use IO::HTML;
 use Path::Tiny;
 
-my $Indent = 1;
-
+my $Indent   = 1;
+our $O       = {};
 my $Defaults = {
     debug         => 0,
+    debug_sub     => sub { say "@_" if $O->{debug} },
     driver        => "PhantomJS",
+    info_sub      => sub { say "@_" },
     prove_options => "",
     run           => 1,
     test_file     => "./test.pl",
@@ -28,19 +32,17 @@ $Data::Dumper::Purity   = 1;
 $Data::Dumper::Sortkeys = 1;
 $Data::Dumper::Deparse  = 1;
 
-our $O = {};
 sub get_options {
     my $o = {};
-    die "Bad option" unless
-        GetOptions($o, qw(
-            conf=s
-            debug!
-            driver=s
-            prove_options=s
-            run!
-            test_file=s
-            verbose!
-        ));
+    die "Bad option" unless GetOptions($o, qw(
+        conf=s
+        debug!
+        driver=s
+        prove_options=s
+        run!
+        test_file=s
+        verbose!
+    ));
 
     our $CONF = {};
     if (my $file = $o->{conf}) {
@@ -52,7 +54,7 @@ sub get_options {
     }
     %$O = (%$Defaults, %$CONF, %$o);
     $O->{begin}->() if $O->{begin};
-    print "Options: ", Dumper $O if $O->{verbose};
+    $O->{info_sub}->("Options:", Dumper $O) if $O->{verbose};
 }
 
 sub fh {
@@ -68,10 +70,11 @@ sub write_header {
     my $o = Data::Dumper->Dump([$O], ["O"]);
     $o =~ s/^/    /mg;
     print { fh } <<"EOH";
-#!/usr/bin/perl
+#!$^X
 
 use 5.18.2;
 use warnings;
+use utf8::all;
 
 use Selenese;
 use Test::More;
@@ -83,6 +86,8 @@ $o
     my \$s = Selenese->new(
         \%\$O
     );
+
+    \$O->{selenese} = \$s;
 
 EOH
 }
@@ -107,21 +112,22 @@ sub write_line {
 
 sub tree {
     my ($file) = @_;
-    my $tree = HTML::TreeBuilder->new;
-    $tree->parse_file($file);
+    my $tree = HTML::TreeBuilder->new_from_file(html_file($file));
+    $O->{debug_sub}->(tree => $tree);
     $tree
 }
 
 sub commands {
     my ($file) = @_;
 
-    say "Generating sub-tests from $file" if $O->{verbose};
+    $O->{info_sub}->("Generating sub-tests from $file") if $O->{verbose};
     my $tree = tree($file);
 
     my $tbody = $tree->find("tbody") or return;
     my @cmds;
     for my $tr ($tbody->find("tr", "~comment")) {
         my @cmd = map $_->[0], grep defined, map $_->content, $tr->find("td");
+        $O->{debug_sub}->(cmd => \@cmd);
         push @cmds, \@cmd;
     }
 
@@ -130,15 +136,16 @@ sub commands {
 
 sub quote_params {
     my (@params) = @_;
-    join ", ", map "q{$_}", map s/\\/\\\\/gr, @params
+    $O->{debug_sub}->(quote_params => \@params);
+    join ", ", map "q{$_}", map s/\\/\\\\/gr, grep defined, @params
 }
 
 my $Cmds = {
     while => sub {
         my ($expr) = @_;
         write_line("while (\$s->run_command(_eval => " .
-                    quote_params($expr) .
-                    ")) {");
+                   quote_params($expr) .
+                   ")) {");
         $Indent++;
     },
     endWhile => sub {
@@ -150,10 +157,12 @@ my $Cmds = {
 sub write_suite {
     my ($file) = @_;
 
-    say "Generating tests from $file" if $O->{verbose};
+    $O->{info_sub}->("Generating tests from $file") if $O->{verbose};
     my $tree = tree($file);
+    $tree->dump if $O->{debug};
 
     my $tbody = $tree->find("tbody") or return;
+    $O->{debug_sub}->(tbody => $tbody);
     my $base_dir = path($file)->parent;
 
     my @test_files =
@@ -162,10 +171,12 @@ sub write_suite {
         map $_->find("td")->find("a"),
         $tbody->find("tr");
 
+    write_line(qq(note "$file";));
     for my $test_file (@test_files) {
         my $test = $test_file =~ s/.*\///r;
         write_line(qq(subtest "$test" => sub {));
         $Indent++;
+        write_line(qq(note "$base_dir/$test";));
 
         for my $command (commands($test_file)) {
             $command = $O->{map}->($test, $command) if $O->{map};
@@ -177,8 +188,8 @@ sub write_suite {
             } else {
                 @params = ("") unless @params;
                 write_line("\$s->run_command($cmd => " .
-                        quote_params(@params) .
-                        ");");
+                           quote_params(@params) .
+                           ");");
             }
         }
 
@@ -196,9 +207,9 @@ sub main {
     }
     write_footer;
 
-    system "prove $O->{prove_options} $O->{test_file}" if $O->{run};
+    return 0 unless $O->{run};
 
-    0
+    system "prove $O->{prove_options} $O->{test_file}"
 }
 
 main
