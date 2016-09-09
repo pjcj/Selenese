@@ -152,7 +152,7 @@ sub quote_params {
 my $Cmds = {
     while => sub {
         my ($expr) = @_;
-        write_line("while (\$r->(_eval => " . quote_params($expr) . ")) {");
+        write_line("while (\$s->run_command(_eval => " . quote_params($expr) . ")) {");
         $Indent++;
     },
     endWhile => sub {

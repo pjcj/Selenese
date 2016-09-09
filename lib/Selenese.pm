@@ -276,7 +276,7 @@ sub run_command {
         params   => \@params,
     ) if $self->{post_sub};
 
-    0
+    $cmd eq "_eval" ? $ret : 0
 }
 
 "
