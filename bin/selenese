@@ -58,8 +58,8 @@ sub get_options {
 }
 
 sub fh {
-    state $fh;
     state $fn = $O->{test_file};
+    state $fh;
     unless ($fh) {
         open $fh, ">", $fn or die "Can't open $fn: $!";
     }
@@ -82,6 +82,9 @@ use Test::More;
 my \$O;
 
 sub main {
+    select STDERR; \$|++;
+    select STDOUT; \$|++;
+
 $o
     my \$s = Selenese->new(
         \%\$O
