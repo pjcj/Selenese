@@ -89,12 +89,18 @@ $o
 
     \$O->{selenese} = \$s;
 
+    my \$r = sub {
+        my \$ret = \$s->run_command(\@_) or return;
+        \$O->{info_sub}->("Command failed: \@_");
+        exit \$ret;
+    };
+
 EOH
 }
 
 sub write_footer {
     print { fh } <<'EOH';
-    $s->run_command("quit");
+    $r->("quit");
 
     done_testing;
 
@@ -143,9 +149,7 @@ sub quote_params {
 my $Cmds = {
     while => sub {
         my ($expr) = @_;
-        write_line("while (\$s->run_command(_eval => " .
-                   quote_params($expr) .
-                   ")) {");
+        write_line("while (\$r->(_eval => " . quote_params($expr) . ")) {");
         $Indent++;
     },
     endWhile => sub {
@@ -187,9 +191,7 @@ sub write_suite {
                 $sub->(@params);
             } else {
                 @params = ("") unless @params;
-                write_line("\$s->run_command($cmd => " .
-                           quote_params(@params) .
-                           ");");
+                write_line("\$r->($cmd => " . quote_params(@params) . ");");
             }
         }
 
@@ -209,10 +211,11 @@ sub main {
 
     return 0 unless $O->{run};
 
-    system "prove $O->{prove_options} $O->{test_file}"
+    system "prove $O->{prove_options} $O->{test_file}";
+    $? == -1 ? 1 : $? & 127 ? $? & 127 : $? >> 8
 }
 
-main
+exit main
 
 __END__
 

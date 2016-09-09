@@ -36,6 +36,10 @@ sub debug {
     my $self = shift;
     $self->{debug_sub} //= sub { say "@_" if $self->{debug} };
 }
+sub info {
+    my $self = shift;
+    $self->{info_sub} //= sub { say "@_" };
+}
 
 sub parse_loc {
     my $self = shift;
@@ -260,7 +264,8 @@ sub run_command {
         $self->capture($self->error_capture)        if $self->error_capture;
         $self->write_page_source($self->error_html) if $self->error_html;
         $self->{cmds}{quit}->();
-        BAIL_OUT("Exiting: $err");
+        $self->info->("Failed: $cmd(", join (", ", @params), ") -> $err");
+        return 1;
     }
 
     $self->{post_sub}->(
@@ -271,7 +276,7 @@ sub run_command {
         params   => \@params,
     ) if $self->{post_sub};
 
-    $ret
+    0
 }
 
 "
